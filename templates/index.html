@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Real-Time Emotion Detection</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Arial', sans-serif;
+        }
+        .display-frame {
+            border: 3px solid #3498db;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 10px;
+            position: relative;
+        }
+        .loader {
+            display: none;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #api-info {
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="p-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Real-Time Emotion Detection</h2>
+
+        <div class="d-flex justify-content-between">
+            <div class="display-frame">
+                <video id="video" width="480" height="360" autoplay></video>
+            </div>
+            <div class="display-frame">
+                <img id="annotatedImage" width="480" height="360" src=""/>
+                <div class="loader" id="imageLoader"></div>
+            </div>
+        </div>
+        <div id="api-info" class="text-center">
+            <p id="callInfo">API Call Status: <span class="text-warning">Waiting for call...</span></p>
+            <p id="responseInfo">Response Status: <span class="text-warning">Awaiting response...</span></p>
+        </div>
+        <canvas id="canvas" width="960" height="720" style="display:none;"></canvas>
+
+        <script>
+            const video = document.getElementById('video');
+            const imageLoader = document.getElementById('imageLoader');
+
+            // Get camera feed
+            navigator.mediaDevices.getUserMedia({ video: {} })
+                .then(stream => {
+                    video.srcObject = stream;
+                    setInterval(takeSnapshot, 1000);  // Take a snapshot every 1 second
+                });
+
+            function takeSnapshot() {
+                const canvas = document.getElementById('canvas');
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 960, 720);
+                canvas.toBlob(sendSnapshot);
+
+                document.getElementById('callInfo').innerHTML = "API Call Status: <span class='text-primary'>Calling...</span>";
+            }
+
+            function sendSnapshot(blob) {
+                imageLoader.style.display = "block"; // Show loader when sending the image
+                const formData = new FormData();
+                formData.append('image', blob);
+
+                $.ajax({
+                    url: '/detect-emotion',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {  // Customize the XHR object to handle binary response
+                        var xhr = new XMLHttpRequest();
+                        xhr.responseType = 'blob';  // Explicitly set responseType
+                        return xhr;
+                    },
+                    success: function(data) {
+                        console.log("AJAX Success!");
+                        imageLoader.style.display = "none"; // Hide loader
+                        const imageUrl = URL.createObjectURL(data);
+                        $('#annotatedImage').attr('src', imageUrl);
+
+                        document.getElementById('callInfo').innerHTML = "API Call Status: <span class='text-success'>Successful</span>";
+                        document.getElementById('responseInfo').innerHTML = "Response Status: <span class='text-success'>Received</span>";
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        console.log("AJAX Error:", textStatus, errorThrown);
+                        imageLoader.style.display = "none"; // Hide loader
+
+                        document.getElementById('callInfo').innerHTML = "API Call Status: <span class='text-danger'>Failed</span>";
+                        document.getElementById('responseInfo').innerHTML = "Response Status: <span class='text-danger'>Error</span>";
+                    }
+                });
+            }
+        </script>
+    </div>
+</body>
+</html>
